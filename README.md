@@ -1,6 +1,6 @@
 # Python API Backend
 
-A modern Python API backend using FastAPI, following SOLID principles and best practices.
+A modern Python API backend using FastAPI and AWS Lambda, following SOLID principles and best practices.
 
 ## Project Structure
 
@@ -11,7 +11,8 @@ A modern Python API backend using FastAPI, following SOLID principles and best p
 │   ├── core/              # Core functionality
 │   │   └── http_client.py # HTTP client interface and implementation
 │   ├── models/            # Data models
-│   └── services/          # Business logic
+│   ├── services/          # Business logic
+│   └── lambda_handler.py  # Lambda handler
 ├── tests/                 # Test files
 │   ├── api/              # API endpoint tests
 │   ├── core/             # Core functionality tests
@@ -19,8 +20,8 @@ A modern Python API backend using FastAPI, following SOLID principles and best p
 │   └── services/         # Service layer tests
 ├── .github/               # GitHub Actions workflows
 ├── .gitignore            # Git ignore file
-├── Dockerfile            # Docker configuration
-├── docker-compose.yml    # Docker Compose configuration
+├── template.yaml         # SAM template
+├── build_layer.sh        # Layer build script
 ├── pyproject.toml        # Project configuration
 └── requirements.txt      # Project dependencies
 ```
@@ -296,4 +297,96 @@ The project includes GitHub Actions for CI/CD:
 - Runs on push to main and pull requests
 - Tests with multiple Python versions
 - Runs linting and type checking
-- Generates and uploads test coverage 
+- Generates and uploads test coverage
+
+## Deployment
+
+### Prerequisites
+
+1. Install AWS SAM CLI:
+```bash
+pip install aws-sam-cli
+```
+
+2. Configure AWS credentials:
+```bash
+aws configure
+```
+
+### Local Development
+
+1. Start the API locally:
+```bash
+sam local start-api
+```
+
+2. Test the API:
+```bash
+curl http://localhost:3000/api/v1/health
+```
+
+### Deployment to AWS
+
+1. Build the dependencies layer:
+```bash
+chmod +x build_layer.sh
+./build_layer.sh
+```
+
+2. Deploy using SAM:
+```bash
+sam build
+sam deploy --guided
+```
+
+### CI/CD Pipeline
+
+The project includes GitHub Actions for CI/CD:
+- Runs on push to main and pull requests
+- Tests with multiple Python versions
+- Runs linting and type checking
+- Generates and uploads test coverage
+- Deploys to AWS Lambda on successful builds
+
+## Lambda-Specific Features
+
+### Cold Start Optimization
+
+The application is optimized for Lambda cold starts:
+- Minimal dependencies
+- Efficient resource initialization
+- Proper connection pooling
+
+### Logging
+
+Using AWS Lambda Powertools for structured logging:
+```python
+from aws_lambda_powertools import Logger
+
+logger = Logger()
+
+@logger.inject_lambda_context
+def handler(event, context):
+    logger.info("Processing request")
+```
+
+### Error Handling
+
+Robust error handling for Lambda environment:
+```python
+try:
+    # Process request
+except Exception as e:
+    logger.exception("Error processing request")
+    return {
+        "statusCode": 500,
+        "body": {"error": "Internal server error"}
+    }
+```
+
+### Monitoring
+
+The application includes:
+- CloudWatch Logs integration
+- X-Ray tracing
+- Custom metrics 

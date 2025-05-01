@@ -1,0 +1,45 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+
+Description: Python API Backend using FastAPI and Lambda
+
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 128
+    Runtime: python3.9
+    Environment:
+      Variables:
+        PYTHONPATH: "/var/task"
+
+Resources:
+  ApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: app.lambda_handler.handler
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /{proxy+}
+            Method: ANY
+      Policies:
+        - AWSLambdaBasicExecutionRole
+      Layers:
+        - !Ref DependenciesLayer
+
+  DependenciesLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: python-api-dependencies
+      Description: Dependencies for Python API
+      ContentUri: ./dependencies
+      CompatibleRuntimes:
+        - python3.9
+      RetentionPolicy: Retain
+
+Outputs:
+  ApiEndpoint:
+    Description: API Gateway endpoint URL
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/" 
