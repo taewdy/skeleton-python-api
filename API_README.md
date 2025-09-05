@@ -16,10 +16,15 @@ src/photos_api/
 ├── app/              # FastAPI application factory
 │   ├── __init__.py
 │   └── factory.py    # App creation and configuration
-├── http/             # HTTP clients and utilities
+├── http/             # HTTP transport (generic)
 │   ├── __init__.py
-│   ├── client.py     # Real HTTP client for external API
-│   └── mock_client.py # Mock client for testing
+│   └── client.py     # Low-level HTTP helpers (e.g., get_json)
+├── photos/           # Photos domain (business)
+│   ├── __init__.py
+│   ├── service.py    # Orchestration: compose gateway + mappers + validators
+│   ├── gateway.py    # External API adapter (I/O only, returns raw data)
+│   ├── mappers.py    # Raw -> Photo model mapping
+│   └── validators.py # Domain validation hooks
 ├── models/           # Pydantic data models
 │   ├── __init__.py
 │   └── photo.py      # Photo model definition
@@ -34,13 +39,13 @@ src/photos_api/
 - **GET /health** - Health check endpoint
 - **GET /** - Root endpoint with API information
 - **Interactive API Documentation** - Available at `/docs`
-- **Mock Mode** - For testing when external API is unavailable
+- **Metrics** - Prometheus metrics at `/metrics`
 - **Proper Error Handling** - HTTP status codes and error messages
 - **Type Safety** - Full type hints and Pydantic validation
 
 ## 📋 API Endpoints
 
-### GET /photos/
+### GET /v1/photos/
 
 Fetch photos from JSONPlaceholder API.
 
@@ -49,7 +54,7 @@ Fetch photos from JSONPlaceholder API.
 
 **Example:**
 ```bash
-curl -X GET "http://localhost:8001/photos/?limit=3"
+curl -X GET "http://localhost:8000/v1/photos/?limit=3"
 ```
 
 **Response:**
@@ -65,13 +70,13 @@ curl -X GET "http://localhost:8001/photos/?limit=3"
 ]
 ```
 
-### GET /photos/{photo_id}
+### GET /v1/photos/{photo_id}
 
 Fetch a single photo by ID.
 
 **Example:**
 ```bash
-curl -X GET "http://localhost:8001/photos/42"
+curl -X GET "http://localhost:8000/v1/photos/42"
 ```
 
 **Response:**
@@ -106,17 +111,13 @@ curl -X GET "http://localhost:8001/photos/42"
 
 3. **Run the application:**
    ```bash
-   # For production (connects to real JSONPlaceholder API)
-   uv run uvicorn src.photos_api.main:app --host 0.0.0.0 --port 8001
-   
-   # For testing with mock data (recommended)
-   USE_MOCK_API=true uv run uvicorn src.photos_api.main:app --host 0.0.0.0 --port 8001
+   uv run uvicorn photos_api.main:app --host 0.0.0.0 --port 8000
    ```
 
 4. **Access the API:**
-   - API Base URL: http://localhost:8001
-   - Interactive Documentation: http://localhost:8001/docs
-   - Health Check: http://localhost:8001/health
+   - API Base URL: http://localhost:8000
+   - Interactive Documentation: http://localhost:8000/docs
+   - Health Check: http://localhost:8000/health
 
 ## 🧪 Testing
 
@@ -126,37 +127,101 @@ Test the endpoints using curl:
 
 ```bash
 # Test health endpoint
-curl -X GET "http://localhost:8001/health"
+curl -X GET "http://localhost:8000/health"
 
 # Test photos endpoint with limit
-curl -X GET "http://localhost:8001/photos/?limit=3"
+curl -X GET "http://localhost:8000/v1/photos/?limit=3"
 
 # Test single photo
-curl -X GET "http://localhost:8001/photos/1"
+curl -X GET "http://localhost:8000/v1/photos/1"
 
 # Test 404 error handling
-curl -X GET "http://localhost:8001/photos/9999"
+curl -X GET "http://localhost:8000/v1/photos/9999"
 ```
 
-### Using the Test Script
+### Metrics
 
-```bash
-uv run python test_api.py
+If enabled, Prometheus metrics are exposed at `/metrics`.
+
+Quick check with curl:
+```
+curl -s http://localhost:8000/metrics | head -n 20
+```
+
+Prometheus scrape config example:
+```
+scrape_configs:
+  - job_name: 'photos-api'
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['localhost:8000']
+```
+
+Docker Compose target example:
+```
+scrape_configs:
+  - job_name: 'photos-api'
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['photos-api:8000']
 ```
 
 ## 🔧 Configuration
 
-### Environment Variables
+### Settings and Environment Variables
 
-- `USE_MOCK_API`: Set to `"true"` to use mock data instead of external API (useful for testing)
+Settings are managed via `pydantic-settings` with the `PHOTOS_API_` prefix, nested keys using `__`, and `.env` support.
 
-### Mock Mode
+Supported variables (defaults in parentheses):
+- `PHOTOS_API_APP_NAME` ("Photos API")
+- `PHOTOS_API_APP_VERSION` (package version or "0.1.0")
+- `PHOTOS_API_SERVER__DEBUG` (false)
+- `PHOTOS_API_SERVER__HOST` ("0.0.0.0")
+- `PHOTOS_API_SERVER__PORT` (8000)
+- `PHOTOS_API_SERVER__RELOAD` (true)
+- `PHOTOS_API_SERVER__LOG_LEVEL` ("info")
+- `PHOTOS_API_CORS__ALLOW_ORIGINS` ("*") — comma-separated list or "*"
+- `PHOTOS_API_CORS__ALLOW_METHODS` ("GET") — comma-separated
+- `PHOTOS_API_CORS__ALLOW_HEADERS` ("*") — comma-separated or "*"
+- `PHOTOS_API_EXTERNAL__BASE_URL` ("https://jsonplaceholder.typicode.com")
+- `PHOTOS_API_EXTERNAL__HTTP_TIMEOUT` (30.0)
+- `PHOTOS_API_EXTERNAL__MAX_RETRIES` (2)
+- `PHOTOS_API_EXTERNAL__BACKOFF_FACTOR` (0.2)
+- `PHOTOS_API_LOGGING__AS_JSON` (false)
 
-When `USE_MOCK_API=true`, the API uses locally generated mock data that matches the JSONPlaceholder API format. This is useful for:
-- Testing without network connectivity
-- Development environments
-- CI/CD pipelines
-- Demonstrations
+Example `.env`:
+```
+PHOTOS_API_SERVER__DEBUG=true
+PHOTOS_API_SERVER__RELOAD=true
+PHOTOS_API_SERVER__LOG_LEVEL=debug
+PHOTOS_API_CORS__ALLOW_ORIGINS=http://localhost:3000,http://localhost:5173
+PHOTOS_API_EXTERNAL__BASE_URL=https://jsonplaceholder.typicode.com
+PHOTOS_API_EXTERNAL__HTTP_TIMEOUT=20
+PHOTOS_API_EXTERNAL__MAX_RETRIES=2
+PHOTOS_API_EXTERNAL__BACKOFF_FACTOR=0.2
+PHOTOS_API_LOGGING__AS_JSON=true
+```
+
+### Testing Strategy
+
+Use monkeypatching to replace domain functions in `photos.service` with fakes during tests. See `tests/test_api.py` for examples.
+
+## 📜 Logging
+
+- Toggle JSON logs with `PHOTOS_API_LOGGING__AS_JSON=true`.
+- Control level via `PHOTOS_API_SERVER__LOG_LEVEL` (e.g. `info`, `debug`).
+- Each response includes an `X-Request-ID` header; it is also logged.
+
+Example JSON log line:
+```
+{"level":"info","logger":"photos_api","message":"request","time":"2025-09-06 12:00:00","request_id":"7f0a9c3e-7e2a-4b8e-9a6b-2f2d1c1b0c5f","method":"GET","path":"/v1/photos"}
+```
+
+To enable JSON logging in development:
+```
+export PHOTOS_API_LOGGING__AS_JSON=true
+export PHOTOS_API_SERVER__LOG_LEVEL=debug
+```
 
 ## 📚 Data Model
 
@@ -213,7 +278,7 @@ uv run mypy src/
 
 This service integrates with the JSONPlaceholder API (https://jsonplaceholder.typicode.com/photos) which provides fake JSON data for testing and prototyping.
 
-**Note:** If you encounter network connectivity issues, use the mock mode by setting `USE_MOCK_API=true`.
+**Note:** For testing without network, override the HTTP client dependency to a fake implementation.
 
 ## 🎯 Production Considerations
 
@@ -239,9 +304,9 @@ See `pyproject.toml` for the complete list of dependencies:
 ## 📖 API Documentation
 
 Once the server is running, visit:
-- **Swagger UI**: http://localhost:8001/docs
-- **ReDoc**: http://localhost:8001/redoc
-- **OpenAPI JSON**: http://localhost:8001/openapi.json
+- **Swagger UI**: http://localhost:8000/docs
+- **ReDoc**: http://localhost:8000/redoc
+- **OpenAPI JSON**: http://localhost:8000/openapi.json
 
 ## ✅ Success Criteria
 
@@ -249,7 +314,6 @@ Once the server is running, visit:
 - ✅ GET /photos endpoint with external API integration
 - ✅ Proper Pydantic models matching the specified Photo struct
 - ✅ Error handling and HTTP status codes
-- ✅ Mock mode for testing without external dependencies
 - ✅ Interactive API documentation
 - ✅ Health check and root endpoints
 - ✅ Type safety and validation

@@ -6,6 +6,7 @@ help:
 	@echo "  install      - Install production dependencies"
 	@echo "  install-dev  - Install development dependencies"
 	@echo "  run          - Run the FastAPI development server"
+	@echo "  run-prod     - Run the server using app settings"
 	@echo "  test         - Run tests"
 	@echo "  lint         - Run all linting tools (format, type-check)"
 	@echo "  format       - Format code with black and isort"
@@ -25,6 +26,10 @@ install-dev:
 # Run the FastAPI development server
 run:
 	uv run uvicorn photos_api.main:app --reload --host 0.0.0.0 --port 8000
+
+# Run the server using main entry (uses settings)
+run-prod:
+	uv run python -m photos_api.main
 
 # Run tests
 test:
@@ -81,7 +86,7 @@ setup: install-dev
 # Show project info
 info:
 	@echo "Project: photos-api"
-	@echo "Python: >=3.8"
+	@echo "Python: >=3.11"
 	@echo "Package Manager: uv"
 	@echo "Framework: FastAPI"
 	@echo ""

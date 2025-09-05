@@ -1,26 +1,16 @@
 from fastapi import APIRouter, HTTPException, Query
 from typing import List, Optional
 import httpx
-import os
 
-from ..models import Photo
-from ..http import HTTPClient
-from ..http.mock_client import MockHTTPClient
+from photos_api.models import Photo
+from photos_api.photos import fetch_photos as fetch_photos_service, fetch_photo_by_id as fetch_photo_by_id_service
 
 router = APIRouter(prefix="/photos", tags=["photos"])
 
 
-def get_http_client():
-    """Get HTTP client based on environment configuration."""
-    use_mock = os.getenv("USE_MOCK_API", "false").lower() == "true"
-    if use_mock:
-        return MockHTTPClient()
-    return HTTPClient()
-
-
 @router.get("/", response_model=List[Photo])
 async def get_photos(
-    limit: Optional[int] = Query(None, ge=1, le=5000, description="Limit number of photos returned")
+    limit: Optional[int] = Query(None, ge=1, le=5000, description="Limit number of photos returned"),
 ) -> List[Photo]:
     """
     Fetch photos from JSONPlaceholder API.
@@ -35,8 +25,7 @@ async def get_photos(
         HTTPException: If external API request fails
     """
     try:
-        http_client = get_http_client()
-        photos = await http_client.fetch_photos(limit=limit)
+        photos = await fetch_photos_service(limit=limit)
         return photos
     except httpx.HTTPError as e:
         raise HTTPException(status_code=502, detail=f"External API error: {str(e)}")
@@ -59,8 +48,7 @@ async def get_photo_by_id(photo_id: int) -> Photo:
         HTTPException: If photo not found or external API request fails
     """
     try:
-        http_client = get_http_client()
-        photo = await http_client.fetch_photo_by_id(photo_id)
+        photo = await fetch_photo_by_id_service(photo_id)
         return photo
     except httpx.HTTPStatusError as e:
         if e.response.status_code == 404:
@@ -68,8 +56,5 @@ async def get_photo_by_id(photo_id: int) -> Photo:
         raise HTTPException(status_code=502, detail=f"External API error: {str(e)}")
     except httpx.HTTPError as e:
         raise HTTPException(status_code=502, detail=f"External API error: {str(e)}")
-    except ValueError as e:
-        # Handle mock client ValueError for 404 scenarios
-        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
