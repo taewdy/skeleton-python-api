@@ -1,62 +1,42 @@
+import asyncio
+import random
 import httpx
-from typing import List, Optional
-from ..models import Photo
+from typing import Any, Dict, Optional, Iterable
 
 
-class HTTPClient:
-    """HTTP client for making requests to external APIs."""
-    
-    def __init__(self, base_url: Optional[str] = None, timeout: float = 30.0):
-        self.base_url = base_url
-        self.timeout = timeout
-    
-    async def fetch_photos(self, limit: Optional[int] = None) -> List[Photo]:
-        """
-        Fetch photos from JSONPlaceholder API.
-        
-        Args:
-            limit: Optional limit on number of photos to return
-            
-        Returns:
-            List of Photo objects
-            
-        Raises:
-            httpx.HTTPError: If the request fails
-        """
-        url = "https://jsonplaceholder.typicode.com/photos"
-        
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            response = await client.get(url)
-            response.raise_for_status()
-            
-            data = response.json()
-            
-            # Apply limit if specified
-            if limit is not None:
-                data = data[:limit]
-            
-            # Convert to Photo objects
-            photos = [Photo(**photo_data) for photo_data in data]
-            return photos
-    
-    async def fetch_photo_by_id(self, photo_id: int) -> Photo:
-        """
-        Fetch a single photo by ID from JSONPlaceholder API.
-        
-        Args:
-            photo_id: ID of the photo to fetch
-            
-        Returns:
-            Photo object
-            
-        Raises:
-            httpx.HTTPError: If the request fails
-        """
-        url = f"https://jsonplaceholder.typicode.com/photos/{photo_id}"
-        
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            response = await client.get(url)
-            response.raise_for_status()
-            
-            data = response.json()
-            return Photo(**data)
+DEFAULT_TIMEOUT = 30.0
+
+
+async def get_json(
+    url: str,
+    *,
+    timeout: float = DEFAULT_TIMEOUT,
+    params: Optional[Dict[str, Any]] = None,
+    max_retries: int = 0,
+    backoff_factor: float = 0.2,
+    retry_statuses: Optional[Iterable[int]] = None,
+) -> Any:
+    """Perform a GET request with optional retries and return parsed JSON.
+
+    Retries on connect/read errors and selected 5xx status codes.
+    """
+    if retry_statuses is None:
+        retry_statuses = (502, 503, 504)
+
+    attempt = 0
+    while True:
+        try:
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                response = await client.get(url, params=params)
+                # Retry on configured 5xx statuses
+                if response.status_code in retry_statuses:
+                    response.raise_for_status()
+                response.raise_for_status()
+                return response.json()
+        except (httpx.ConnectError, httpx.ReadTimeout, httpx.RemoteProtocolError, httpx.HTTPStatusError) as exc:
+            if attempt >= max_retries:
+                raise
+            # exponential backoff with jitter
+            sleep_for = backoff_factor * (2 ** attempt) + random.uniform(0, backoff_factor)
+            attempt += 1
+            await asyncio.sleep(sleep_for)

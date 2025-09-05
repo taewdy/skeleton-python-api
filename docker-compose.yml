@@ -1,0 +1,13 @@
+version: "3.9"
+services:
+  photos-api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      PHOTOS_API_SERVER__HOST: 0.0.0.0
+      PHOTOS_API_SERVER__PORT: 8000
+      PHOTOS_API_SERVER__RELOAD: "false"
+      PHOTOS_API_SERVER__LOG_LEVEL: info
+      PHOTOS_API_EXTERNAL__BASE_URL: https://jsonplaceholder.typicode.com
+      PHOTOS_API_EXTERNAL__HTTP_TIMEOUT: 20
