@@ -25,7 +25,7 @@ Example domain layering
 - `api/`: HTTP endpoints (FastAPI routers).
 - `app/`: application factory (wires routers, middleware, exception handlers).
 - `http/`: low-level transport helpers (e.g., `get_json`), no business logic.
-- `domain/feature/` (e.g., `photos/`):
+- `domain-or-feature/` (e.g., `photos/`):
   - `service.py`: orchestration entry points used by routes.
   - `gateway.py`: external system adapter, returns raw data only.
   - `mappers.py`: raw → models conversion.
