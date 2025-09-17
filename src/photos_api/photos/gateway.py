@@ -1,38 +1,41 @@
-"""External API adapter for the Photos domain.
+"""External API adapter for the Photos domain."""
+from __future__ import annotations
 
-Responsible solely for I/O with the remote service and returning raw data
-structures (dicts/lists). No business rules or model mapping here.
-"""
-from typing import Any, Dict, List
+from typing import List, cast
 
 from photos_api.http.client import get_json
+from photos_api.photos.protocols import RawPhoto
 from photos_api.settings import get_settings
-from typing import cast
 
 
-async def list_photos() -> List[Dict[str, Any]]:
-    s = get_settings()
-    base = str(s.external.base_url).rstrip("/")
+async def list_photos() -> List[RawPhoto]:
+    """Fetch raw photo payloads from the configured external service."""
+
+    settings = get_settings()
+    base = str(settings.external.base_url).rstrip("/")
     url = f"{base}/photos"
     data = await get_json(
         url,
-        timeout=s.external.http_timeout,
-        max_retries=s.external.max_retries,
-        backoff_factor=s.external.backoff_factor,
+        timeout=settings.external.http_timeout,
+        max_retries=settings.external.max_retries,
+        backoff_factor=settings.external.backoff_factor,
     )
-    # Expect a list of dicts
-    return data  # type: ignore[return-value]
+    return cast(List[RawPhoto], data)
 
 
-async def get_photo(photo_id: int) -> Dict[str, Any]:
-    s = get_settings()
-    base = str(s.external.base_url).rstrip("/")
+async def get_photo(photo_id: int) -> RawPhoto:
+    """Fetch a single raw photo payload from the configured external service."""
+
+    settings = get_settings()
+    base = str(settings.external.base_url).rstrip("/")
     url = f"{base}/photos/{photo_id}"
     data = await get_json(
         url,
-        timeout=s.external.http_timeout,
-        max_retries=s.external.max_retries,
-        backoff_factor=s.external.backoff_factor,
+        timeout=settings.external.http_timeout,
+        max_retries=settings.external.max_retries,
+        backoff_factor=settings.external.backoff_factor,
     )
-    # Expect a dict
-    return data  # type: ignore[return-value]
+    return cast(RawPhoto, data)
+
+
+__all__ = ["list_photos", "get_photo"]
